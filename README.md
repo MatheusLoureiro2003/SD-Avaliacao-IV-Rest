@@ -1,134 +1,122 @@
-# Sistemas-Distribuidos-Avaliacao-II
-Microsserviços, Sistema de Mensageria, Criptografia de Chave  Assimétrica
+* Avaliação IV - Microsserviços, Sistema de Mensageria, REST, SSE, Chaves assimétricas
 
-A *Exchange* é um agente de mensagens. Ela recebe mensagens do seu produtor (ex: MS Gateway) e as empurra para as Queues. Ela não armazena mensagens; ela apenas decide para onde elas devem ir com base em regras chamadas Bindings (ligações).
+Desenvolver uma aplicação web distribuída para gerenciamento e divulgação de promoções de produtos.
+A aplicação deve seguir uma arquitetura baseada em microsserviços e orientada a eventos (Event-Driven Architecture). Os microsserviços devem se comunicar de forma assíncrona e desacoplada utilizando RabbitMQ. Não é permitido realizar chamadas diretas entre os microsserviços.
 
-*Exchange Escolhida: Topic*
+- A aplicação deve possuir:
 
-# Routing Keys
-A Routing Key é um "atributo" ou "etiqueta" que o produtor anexa à mensagem. Ela descreve o conteúdo da mensagem.
+• frontend web implementado em linguagem diferente do backend;
+• comunicação REST entre frontend e backend;
+• notificações em tempo real utilizando SSE (Server-Sent Events);
+• integração com API externa de envio de e-mails;
+• assinatura digital dos eventos publicados pela loja.
+• Usuários do tipo loja poderão cadastrar promoções de produtos.
+• Usuários consumidores poderão consultar promoções, votar em promoções cadastradas e registrar interesse em categorias específicas para receber notificações em tempo real via SSE.
+• Promoções com grande quantidade de votos positivos (definir um limite) devem ser classificadas como promoções em destaque (hot deals).
 
-- promotion.received
-- promotion.vote
-- promotion.published
-- promotion.highlight //publica promoçoes em destaque
-- promotion.[category]
+- Frontend (valor 0,5)
 
-### auto_ack=True em todos os consumidores
+• O frontend deve ser desenvolvido em linguagem diferente daquela utilizada no backend e deve se comunicar com o sistema exclusivamente através de uma API REST.
+• O frontend também deve receber notificações sobre promoções do seu interesse através do SSE.
+• Os usuários consumidores poderão interagir com a aplicação web para:
+1. consultar promoções publicadas;
+2. votar positivamente ou negativamente em promoções;
+3. registrar interesse em categorias de produtos;
+4. cancelar interesse em categorias;
+5. receber notificações em tempo real sobre promoções de interesse. As notificações SSE devem ser exibidas automaticamente no navegador sem necessidade de atualização manual da página.
 
-  - Todos os basic_consume trocados para auto_ack=False em gateway.py, promotion.py, ranking.py, notification.py e consumer.py.  
-  Cada callback agora chama explicitamente basic_ack ao concluir com sucesso e basic_nack(requeue=False) ao descartar (assinatura
-   inválida, JSON malformado, exceção) — garantindo que mensagens não sejam perdidas silenciosamente em caso de falha antes do   
-  processamento completo.  
+- Loja (valor 0,5)
 
-----
-# Sobre o Projeto
+Consumirá a API do sistema de Promoção para cadastrar promoções e informar o e-mail. A loja receberá notificações por e-mail relacionadas aos destaques de suas promoções. Assinará as mensagens de cadastro de promoções. Somente serão aceitas as promoções das assinaturas validadas.
 
-## Microsserviços, Sistema de Mensageria, Criptografia de Chave Assimétrica
+- Backend (valor 1,5)
+O backend será composto por quatro microsserviços independentes, desenvolvidos de forma desacoplada, que se comunicam exclusivamente através do RabbitMQ. (valor 1,0) MS Gateway/API
 
-Desenvolver um sistema distribuído baseado em microsserviços para gerenciamento e
-divulgação de promoções de produtos. O sistema deve seguir uma arquitetura
-orientada a eventos (Event-Driven Architecture), na qual os microsserviços se
-comunicam exclusivamente através de eventos publicados e consumidos em/de um
-broker RabbitMQ. 
+Responsável por:
 
-- Cada microsserviço deverá atuar de forma independente e desacoplada. Então, não é permitido realizar chamadas diretas entre os microsserviços.
-- Usuários podem cadastrar promoções, votar em promoções cadastradas e receber notificações sobre promoções de seu interesse. Promoções com grande quantidade de votos positivos (estabelecer um limite) devem ser destacadas como promoções em destaque (hot deal).
+• expor a API REST consumida pelo frontend;
+• transformar ações dos usuários em eventos publicados no RabbitMQ;
+• consumir eventos dos demais microsserviços;
+• manter conexões SSE com os clientes;
+• encaminhar notificações SSE apenas para os clientes interessados.
 
-### (0,2) Processos Cliente Consumidores de Promoções
-O processo cliente consumidor é responsável por receber notificações sobre promoções
-de interesse. Quando um usuário decide seguir uma determinada categoria de produto,
-ele passa a consumir notificações de promoções desta categoria no RabbitMQ.
+- API REST (valor 0,5)
+O MS Gateway deve disponibilizar endpoints REST para:
+• cadastrar promoções (loja);
+• listar promoções publicadas;
+• votar em promoções;
+• registrar interesse em categorias;
+• cancelar interesse em categorias.
 
-(0,2) Cada cliente deve manifestar seu interesse em receber notificações de eventos sobre
-promoções de diferentes categorias e promoções em destaque. Por exemplo, um cliente
-interessado em promoções de livros, jogos e de promoções em destaque consumirá os
-eventos promocao.livro, promocao.jogo e promocao.destaque, respectivamente. Ao
-receber uma mensagem de notificação, esta será exibida no terminal.
+- SSE (valor 0,5)
+O MS Gateway deve manter conexões SSE com os clientes para envio de notificações em
+tempo real.
+As notificações SSE devem incluir:
+• promoções em destaque (hot deals);
+• promoções relacionadas às categorias seguidas pelo usuário.
+O serviço deve manter os interesses dos usuários e filtrar os eventos recebidos antes de enviá-los ao navegador.
 
-- Para simplificar, as categorias de interesse dos usuários podem estar definidas no código do cliente (hard coded).
+RabbitMQ Publica os eventos:
+• promotion.vote
+Consome os eventos:
+• promotion.published
+• promotion.destaque
+• promotion.categoria
+• notificação.hotdeal
 
-- O sistema deve utilizar uma exchange do tipo direct ou topic no RabbitMQ. 
+- MS Promoção (valor 0,2)
+Responsável pelo gerenciamento das promoções cadastradas.
+O microsserviço:
+• consome eventos de novas promoções;
+• valida a assinatura digital dos eventos recebidos da loja via MS Gateway;
+• registra promoções válidas;
+• publica eventos indicando que a promoção foi disponibilizada.
 
-Os eventos devem utilizar routing keys hierárquicas, permitindo que consumidores se inscrevam
-em diferentes categorias de eventos utilizando padrões de binding. Cada cliente pode criar
-sua própria fila e associá-la às routing keys correspondentes às categorias de interesse.
+RabbitMQ Consome: 
+• promocao.recebida
+Publica: promocao.publicada
 
-### (1,8) Arquitetura baseada em eventos
-O sistema deve ser implementado utilizando 4 microsserviços independentes, cada um
-responsável por uma parte da lógica da aplicação. As responsabilidades desses
-microsserviços e os eventos publicados e/ou consumidos por cada um estão descritos a
-seguir.
+- MS Ranking
+Responsável pelo processamento dos votos associados às promoções.
+Ao receber um evento:
+• valida a assinatura digital;
+• processa o voto;
+• atualiza o score da promoção;
+• identifica promoções em destaque.
 
-1. (0,5) Microsserviço Gateway
+Quando o limite de popularidade for atingido, o serviço deve publicar um evento indicando que a promoção se tornou um hot deal.
 
-(0,2) Responsável por realizar a interação com os usuários (clientes e lojas) por meio
-do terminal. Ele apresenta as opções do sistema e permite que os usuários executem ações como:
-- cadastrar novas promoções
-- listar promoções publicadas (validadas pelo MS Promocao)
-- votar em promoções existentes. 
-Esse serviço funciona como o ponto de entrada do sistema e transforma as ações realizadas pelos usuários em eventos que serão enviados para o broker RabbitMQ.
+RabbitMQ Consome: 
+promocao.voto
+Publica: promocao.destaque
 
-(0,1) Sempre que um evento for publicado, o gateway deve gerar a assinatura digital
-da mensagem utilizando sua chave privada e incluí-la no envelope do evento.
+- (valor 0,3) MS Notificação
+Responsável pelo envio de notificações por e-mail relacionadas às promoções.
+O microsserviço deve:
+• consumir eventos relacionados a promoções publicadas e promoções em
+destaque;
+• validar as assinaturas digitais;
+• identificar os tipos de notificação necessários;
+• publicar eventos destinados ao Gateway;
+• integrar-se a uma API externa para envio de e-mails.
+RabbitMQ
+Consome:
+• promocao.publicada
+• promocao.destaque
+Publica:
+• promocao.categoria
+Atenção: as notificações destinadas aos consumidores serão posteriormente enviadas ao
+navegador pelo MS Gateway através de SSE.
 
-(0,2) O gateway publica eventos promocao.recebida, promocao.voto. Esse serviço
-consome os eventos promocao.publicada e mantém uma lista local de promoções
-validadas, permitindo que os usuários listem apenas promoções já aprovadas pelo
-microsserviço Promocao.
-----
+- API externa de e-mail
+O MS Notificação deve utilizar uma API externa de envio de e-mails para notificar as
+lojas responsáveis pelas promoções.
+Exemplos de notificações:
+• promoção aprovada;
+• promoção tornou-se hot deal.
+Sugestão de API para envio de e-mail: Resend
 
-2. (0,3) Microsserviço Promocao
-
-(0,2) Responsável pelo gerenciamento das promoções no sistema. Esse serviço recebe
-eventos indicando que novas promoções foram recebidas. Ao receber um evento, o
-serviço deve inicialmente validar a assinatura digital da mensagem para garantir sua
-autenticidade e integridade. Quando um evento de promoção é validado, o serviço registra
-a promoção, assina e publica um novo evento informando que a promoção foi disponibilizada no sistema.
-
-(0,1) O microsserviço Promocao consome os eventos promocao.recebida, assina
-digitalmente e publica eventos promocao.publicada.
-
-3. (0,5) Microsserviço Ranking
-
-(0,3) Responsável pelo processamento dos votos associados às promoções. Ao
-receber um evento, o serviço deve inicialmente validar a assinatura digital da
-mensagem para garantir sua autenticidade e integridade. Para cada evento validado, ele:
-- processa o voto (positivo ou negativo) da promoção correspondente
-- atualiza o contador de votos e recalcula o score de popularidade da promoção específica. Caso o scoreultrapasse um limite definido pelo sistema, a promoção deve ser considerada uma promoção em destaque (hot deal). 
-- Quando isso ocorrer, o serviço assina e publica um novo evento indicando que a promoção foi destacada. 
-Todos os eventos publicados por esse serviço devem ser assinados digitalmente antes de serem enviados ao RabbitMQ.
-
-(0,2) O ranking consome o evento promocao.voto, assina digitalmente e publica o
-evento promocao.destaque.
-
-----
-
-4. (0,5) Microsserviço Notificação
-
-(0,1) Responsável por distribuir notificações sobre promoções publicadas no sistema.
-Esse serviço consome eventos relacionados à publicação de novas promoções e à
-identificação de promoções em destaque. Ao receber um evento, o serviço deve validar
-a assinatura digital da mensagem para garantir sua autenticidade e integridade. Após a
-validação, o serviço identifica a categoria associada à promoção e publica uma notificação
-correspondente no RabbitMQ.
-
-(0,4) Esse serviço consome os eventos promocao.publicada e promocao.destaque, e
-publica eventos promocao.categoria1, promocao.categoria2, ..., promocao.categoriaN.
-Para cada nova promoção em destaque, ele deve publicar um novo evento na categoria
-correspondente com a palavra “hot deal”
-----
-
-Assinatura digital dos eventos:
-Cada microsserviço (exceto Notificações) que publicar um evento deve:
-
-1. gerar um hash do conteúdo do evento;
-2. assinar o evento utilizando criptografia assimétrica;
-3. incluir a assinatura digital no campo Signature.
-4. A assinatura deve ser gerada utilizando a chave privada do microsserviço produtor.
-
-Validação da assinatura:
-Todo microsserviço que consumir um evento deve:
-1.  verificar a assinatura digital utilizando a chave pública do produtor;
-2. confirmar que o evento não foi alterado;
-3. processar o evento apenas se a assinatura for válida. Caso a assinatura seja inválida, o evento deve ser descartado.
+Observações:
+• Desenvolva uma interface gráfica com recursos de interação apropriados.
+• É obrigatória a defesa da aplicação para obter a nota.
+• O desenvolvimento do sistema pode ser individual ou em dupla.
