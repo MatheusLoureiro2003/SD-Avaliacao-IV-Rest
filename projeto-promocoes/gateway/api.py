@@ -5,7 +5,7 @@
 #   3. O servidor recebe, chama gateway.listar_promocoes() internamente
 #   4. Serializa o resultado como JSON e devolve ao navegador
 
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request #O request é o objeto que dá acesso ao corpo JSON da requisição
 from gateway import Gateway
 
 servidorWeb = Flask(__name__)
@@ -17,6 +17,52 @@ def listar():
 
 #  O decorador @app.route registra a URL /promocoes
 #  jsonify(...) pega a listar_promocoes() retorna e transforma em JSON válido para o navegador
+
+# ---------------------------------------------------------------
+#  Funcao de POST/promocoes: cadastrar pelo HTTP e ver aparecer no GET /promocoes, sem precisar da interfaceGateway.py.
+# ---------------------------------------------------------------
+#   1. Receber um JSON no corpo da requisição com os dados da promoção
+#   2. Chamar gw.cadastrar_promocao(...) passando esses dados
+#   3. Retornar o id gerado como confirmação
+
+@servidorWeb.route('/promocoes', methods=['POST'])
+def cadastrar():
+    dados = request.get_json()
+    id_gerado, assinatura = gw.cadastrar_promocao(
+        dados['titulo'],
+        dados['descricao'],
+        dados['categoria'],
+        dados['preco_original'],
+        dados['preco_promocional']
+    )
+    return jsonify({'id':id_gerado}), 201
+
+# TESTE
+#   curl -X POST http://localhost:5001/promocoes \
+#     -H "Content-Type: application/json" \
+#     -d '{"titulo":"Notebook","descricao":"Bom","categoria":"eletronicos","preco_original":3000,"preco_promocional":2499}'
+
+# ---------------------------------------------------------------
+#  POST /promocoes/<id>/votar — votar em uma promoção existente
+# ---------------------------------------------------------------
+#   1. Receber o id da promoção pela URL
+#   2. Receber o tipo do voto no corpo JSON
+#   3. Chamar gw.votar_promocao(...)
+#   4. Retornar confirmação
+
+@servidorWeb.route('/promocoes/<id>/votar', methods=['POST'])
+def votar(id):
+    dados = request.get_json()
+    voto = dados['voto']
+    gw.votar_promocao(id, voto)
+
+    return jsonify({'ok': True}), 200
+
+# TESTE
+# curl -X POST http://localhost:5001/promocoes/SEU-ID-AQUI/votar \
+    # -H "Content-Type: application/json" \
+    # -d '{"voto": "positivo"}'
+    
 
 if __name__ == '__main__':
     servidorWeb.run(host='0.0.0.0', port=5001)
