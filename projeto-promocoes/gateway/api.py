@@ -6,9 +6,11 @@
 #   4. Serializa o resultado como JSON e devolve ao navegador
 
 from flask import Flask, jsonify, request #O request é o objeto que dá acesso ao corpo JSON da requisição
+from flask_cors import CORS
 from gateway import Gateway
 
 servidorWeb = Flask(__name__)
+CORS(servidorWeb)
 gw  = Gateway()
 
 @servidorWeb.route('/promocoes', methods=['GET'])
@@ -63,6 +65,37 @@ def votar(id):
     # -H "Content-Type: application/json" \
     # -d '{"voto": "positivo"}'
     
+
+# ---------------------------------------------------------------
+#  POST /interesses/ — registrar interesse em uma categoria de promoçao
+# ---------------------------------------------------------------
+#   # Body: { "client_id": "abc123", "categoria": "eletronicos" }
+
+@servidorWeb.route('/categorias/interesse', methods=['POST'])
+def registrar_interesse():
+    dados = request.get_json()
+    client_id = dados.get('client_id')
+    categoria = dados.get('categoria')
+
+    if not client_id or not categoria:
+        return jsonify({'erro': 'client_id e categoria sao obrigatorios'}), 400
+    
+    gw.registrar_interesse(client_id, categoria)
+    return jsonify({'ok': True}), 201
+
+# ---------------------------------------------------------------
+#  DELETE /interesses/ — remover interesse em uma categoria de promoçao
+# ---------------------------------------------------------------
+
+@servidorWeb.route('/categorias/interesse/<categoria>', methods=['DELETE'])
+def cancelar_interesse(categoria):
+    client_id = request.args.get('client_id')
+
+    if not client_id:
+        return jsonify({'erro': 'client_id é obrigatorio'}), 400
+
+    gw.cancelar_interesse(client_id, categoria)
+    return jsonify({'ok': True}), 200
 
 if __name__ == '__main__':
     servidorWeb.run(host='0.0.0.0', port=5001)

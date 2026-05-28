@@ -30,6 +30,7 @@ class Gateway:
     def __init__(self):
         _ensure_keys()
 
+
         with open(PRIVATE_KEY_PATH, 'rb') as f:
             self._private_key = RSA.import_key(f.read())
 
@@ -42,6 +43,7 @@ class Gateway:
             self._promotion_public_key = RSA.import_key(f.read())
 
         self.promocoes_validas: list[dict] = []
+        self._interesses: dict[str, set[str]] = {}
         self._lock = threading.Lock()
 
         # Canal de publicação (thread principal)
@@ -232,6 +234,17 @@ class Gateway:
 
         thread = threading.Thread(target=run, daemon=True)
         thread.start()
+
+    def registrar_interesse(self, client_id: str, categoria: str):
+        with self._lock:
+            if client_id not in self._interesses:
+                self._interesses[client_id] = set() 
+            self._interesses[client_id].add(categoria) 
+
+    def cancelar_interesse(self, client_id: str, categoria: str):
+        with self._lock:
+            if client_id in self._interesses:
+                self._interesses[client_id].discard(categoria)
 
     # ------------------------------------------------------------------
     # Encerramento

@@ -1,0 +1,9 @@
+body { background: #f8f9fa; }
+.navbar-brand { font-weight: 700; letter-spacing: 1px; }
+.nav-tabs .nav-link { cursor: pointer; }
+.card-hot { border-color: #fd7e14 !important; }
+.badge-hot { background: #fd7e14; }
+.score-pos { color: #198754; font-weight: 600; }
+.score-neg { color: #dc3545; font-weight: 600; }
+.interesse-btn { min-width: 110px; }
+.client-id-badge { font-size: 0.72rem; color: #6c757d; word-break: break-all; }
