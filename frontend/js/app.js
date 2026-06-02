@@ -189,6 +189,16 @@ app.component('formularioCadastro', {
               </div>
 
               <div class="mb-3">
+                <label class="form-label">E-mail da loja <span 
+              class="text-danger">*</span></label>
+                <input type="email" class="form-control" 
+              ng-model="$ctrl.form.email"
+                      ng-class="{'is-invalid': formCad.$submitted && 
+              !$ctrl.form.email}" required />
+                <div class="invalid-feedback">Campo obrigatório.</div>
+              </div>
+
+              <div class="mb-3">
                 <label class="form-label">Categoria <span class="text-danger">*</span></label>
                 <select class="form-select" ng-model="$ctrl.form.categoria"
                         ng-class="{'is-invalid': formCad.$submitted && !$ctrl.form.categoria}" required>
@@ -227,7 +237,7 @@ app.component('formularioCadastro', {
       </div>
     </div>
   `,
-  controller: function($http) {
+  controller: function($http, $scope) {
     const $ctrl   = this;
     $ctrl.categorias = CATEGORIAS;
     $ctrl.form    = {};
@@ -247,6 +257,11 @@ app.component('formularioCadastro', {
         $ctrl.sucesso = false;
         return;
       }
+      if (!f.titulo || !f.categoria || !f.preco_original ||!f.preco_promocional || !f.email) { 
+        $ctrl.alerta  = 'Preencha todos os campos obrigatórios.';
+        $ctrl.sucesso = false;
+        return;
+      }
 
       $ctrl.enviando = true;
       $ctrl.alerta   = '';
@@ -256,7 +271,8 @@ app.component('formularioCadastro', {
         descricao:         f.descricao || '',
         categoria:         f.categoria,
         preco_original:    Number(f.preco_original),
-        preco_promocional: Number(f.preco_promocional)
+        preco_promocional: Number(f.preco_promocional),
+        email:             f.email,
       };
 
       $http.post(API + '/promocoes', payload)
@@ -264,6 +280,10 @@ app.component('formularioCadastro', {
           $ctrl.alerta  = 'Promoção publicada! ID: ' + res.data.id;
           $ctrl.sucesso = true;
           $ctrl.form    = {};
+          if ($scope.formCad) {
+            $scope.formCad.$setPristine();
+            $scope.formCad.$setUntouched();
+          }
         }, function() {
           $ctrl.alerta  = 'Erro ao cadastrar promoção. Verifique se o servidor está rodando.';
           $ctrl.sucesso = false;

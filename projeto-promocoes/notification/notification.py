@@ -1,14 +1,28 @@
+# Resend é um serviço de envio de e-mails via API. Você faz
+#   uma requisição HTTP para ele e ele envia o e-mail pelo
+#   servidor deles
+
+#Como funciona
+
+#   seu código → POST https://api.resend.com/emails → Resend →
+#   e-mail chega na caixa da loja
+
+# No plano gratuito do Resend, só pode enviar para o 
+#   e-mail da sua conta (romao@alunos.utfpr.edu.br).
+#   Qualquer outro endereço retorna erro 403.
 import json
 import os
 import sys
 import unicodedata
 
 import pika
+import requests
 from Crypto.Hash import SHA256
 from Crypto.PublicKey import RSA
 from Crypto.Signature import pkcs1_15
 
-EXCHANGE = 'promotion'
+EXCHANGE   = 'promotion'
+RESEND_KEY = 're_RoFW9iQF_ENRMnzteQ5s1QcD5mUe3nt9Q'
 
 _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PROMOTION_PUBLIC_KEY_PATH = os.path.join(_BASE_DIR, '..', 'promotion', 'public_key.der')
@@ -56,8 +70,8 @@ class NotificationService:
             sys.exit(1)
 
         self._ids_notificados: set[str] = set()
-        # Mapa id_promocao → categoria, necessário para publicar hot deals na categoria correta
         self._categorias: dict[str, str] = {}
+        self._emails: dict[str, str] = {}
 
         print("Notification Service iniciado com sucesso!")
 
@@ -78,6 +92,26 @@ class NotificationService:
     # ------------------------------------------------------------------
     # Publicação de notificações
     # ------------------------------------------------------------------
+
+    def _enviar_email(self, destinatario: str, assunto: str, corpo: str):
+        try:
+            resp = requests.post(
+                'https://api.resend.com/emails',
+                headers={'Authorization': f'Bearer {RESEND_KEY}'},
+                json={
+                    'from': 'onboarding@resend.dev',
+                    'to': destinatario,
+                    'subject': assunto,
+                    'text': corpo,
+                },
+                timeout=10,
+            )
+            if resp.status_code == 200 or resp.status_code == 201:
+                print(f"[Email] Enviado para {destinatario}: {assunto}")
+            else:
+                print(f"[Email] Falha ao enviar para {destinatario}: {resp.status_code} {resp.text}")
+        except Exception as e:
+            print(f"[Email] Erro ao chamar Resend: {e}")
 
     def _publish_notification(self, categoria: str, mensagem: str):
         """Publica a notificação na routing key da categoria (sem assinatura — README isenta Notification)."""
@@ -112,13 +146,23 @@ class NotificationService:
         categoria = payload.get('categoria', 'geral')
         titulo    = payload.get('titulo', 'Nova Promoção')
         preco     = payload.get('preco_promocional', 0)
+        email     = payload.get('email', '')
 
-        # Armazena categoria para uso posterior ao receber hot deal desta promoção
         if promo_id:
             self._categorias[promo_id] = categoria
+            self._emails[promo_id]     = email
 
         msg = f"Nova oferta: {titulo} por apenas R$ {preco:.2f}!"
         self._publish_notification(categoria, msg)
+
+        if email:
+            self._enviar_email(
+                email,
+                f"Promoção aprovada: {titulo}",
+                f"Sua promoção '{titulo}' foi aprovada e publicada!\n"
+                f"Categoria: {categoria}\n"
+                f"Preço promocional: R$ {preco:.2f}",
+            )
 
     def processar_destaque(self, envelope: dict):
         """Processa hot deals (vindos do MS Ranking)."""
@@ -139,13 +183,19 @@ class NotificationService:
         score = payload.get('score', 0)
         msg = f"HOT DEAL! Promocao {id_promo} esta em destaque com score {score}!"
 
-        # Publica na categoria original da promoção com "hot deal" — conforme README
         categoria = self._categorias.get(id_promo)
         if categoria:
             self._publish_notification(categoria, msg)
 
-        # Publica também em 'destaque' para clientes inscritos em todas as promoções em destaque
         self._publish_notification("destaque", msg)
+
+        email = self._emails.get(id_promo, '')
+        if email:
+            self._enviar_email(
+                email,
+                "Sua promoção virou HOT DEAL!",
+                f"Parabéns! Sua promoção (ID: {id_promo}) atingiu score {score} e está em destaque!",
+            )
 
     # ------------------------------------------------------------------
     # Loop de consumo

@@ -35,7 +35,8 @@ def cadastrar():
         dados['descricao'],
         dados['categoria'],
         dados['preco_original'],
-        dados['preco_promocional']
+        dados['preco_promocional'],
+        dados.get('email', '')
     )
     return jsonify({'id':id_gerado}), 201
 

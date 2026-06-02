@@ -1,0 +1,15 @@
+Gateway iniciado com sucesso!
+ * Serving Flask app 'api'
+ * Debug mode: off
+[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5001
+ * Running on http://10.20.1.212:5001
+[33mPress CTRL+C to quit[0m
+127.0.0.1 - - [02/Jun/2026 15:13:30] "GET /promocoes HTTP/1.1" 200 -
+127.0.0.1 - - [02/Jun/2026 15:13:32] "GET /promocoes HTTP/1.1" 200 -
+127.0.0.1 - - [02/Jun/2026 15:13:41] "OPTIONS /promocoes HTTP/1.1" 200 -
+127.0.0.1 - - [02/Jun/2026 15:13:41] "[35m[1mPOST /promocoes HTTP/1.1[0m" 201 -
+127.0.0.1 - - [02/Jun/2026 15:13:43] "GET /promocoes HTTP/1.1" 200 -
+127.0.0.1 - - [02/Jun/2026 15:13:43] "OPTIONS /categorias/interesse HTTP/1.1" 200 -
+127.0.0.1 - - [02/Jun/2026 15:13:43] "[35m[1mPOST /categorias/interesse HTTP/1.1[0m" 201 -

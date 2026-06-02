@@ -105,6 +105,7 @@ class Gateway:
         categoria: str,
         preco_original: float,
         preco_promocional: float,
+        email: str = ''
     ) -> tuple[str, str]:
         """Publica promotion.received. Retorna (id_gerado, assinatura)."""
         payload = {
@@ -114,6 +115,7 @@ class Gateway:
             'categoria': categoria,
             'preco_original': preco_original,
             'preco_promocional': preco_promocional,
+            'email': email,
         }
         signature = self.publish_event('promotion.received', payload)
         return payload['id'], signature
