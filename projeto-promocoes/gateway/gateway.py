@@ -14,6 +14,7 @@ _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PRIVATE_KEY_PATH          = os.path.join(_BASE_DIR, 'private_key.der')
 PUBLIC_KEY_PATH           = os.path.join(_BASE_DIR, 'public_key.der')
 PROMOTION_PUBLIC_KEY_PATH = os.path.join(_BASE_DIR, '..', 'promotion', 'public_key.der')
+RANKING_PUBLIC_KEY_PATH   = os.path.join(_BASE_DIR, '..', 'ranking',   'public_key.der')
 
 
 def _ensure_keys():
@@ -42,6 +43,14 @@ class Gateway:
         with open(PROMOTION_PUBLIC_KEY_PATH, 'rb') as f:
             self._promotion_public_key = RSA.import_key(f.read())
 
+        if not os.path.exists(RANKING_PUBLIC_KEY_PATH):
+            raise FileNotFoundError(
+                f"Chave pública do Ranking não encontrada em: {RANKING_PUBLIC_KEY_PATH}\n"
+                "Certifique-se de que o Ranking foi iniciado antes do Gateway."
+            )
+        with open(RANKING_PUBLIC_KEY_PATH, 'rb') as f:
+            self._ranking_public_key = RSA.import_key(f.read())
+
         self.promocoes_validas: list[dict] = []
         self._interesses: dict[str, set[str]] = {}
         self._lock = threading.Lock()
@@ -60,6 +69,15 @@ class Gateway:
     # ------------------------------------------------------------------
     # Assinatura digital
     # ------------------------------------------------------------------
+
+    def _verify_ranking_signature(self, payload: dict, signature_hex: str) -> bool:
+        try:
+            data = json.dumps(payload, sort_keys=True, ensure_ascii=False).encode()
+            h = SHA256.new(data)
+            pkcs1_15.new(self._ranking_public_key).verify(h, bytes.fromhex(signature_hex))
+            return True
+        except (ValueError, TypeError):
+            return False
 
     def verify_promotion_signature(self, payload: dict, signature_hex: str) -> bool:
         """Valida a assinatura do Promotion Service sobre o payload."""
@@ -128,18 +146,6 @@ class Gateway:
             'voto': voto,
         }
         signature = self.publish_event('promotion.vote', payload)
-
-        # Atualiza contagem local para refletir na listagem
-        with self._lock:
-            for p in self.promocoes_validas:
-                if p.get('id') == id_promocao:
-                    votos = p.setdefault('votos', {'positivos': 0, 'negativos': 0})
-                    if voto == 'positivo':
-                        votos['positivos'] += 1
-                    else:
-                        votos['negativos'] += 1
-                    break
-
         return signature
 
     def listar_promocoes(self) -> list[dict]:
@@ -168,6 +174,11 @@ class Gateway:
                         queue=queue_name,
                         routing_key='promotion.published',
                     )
+                    ch.queue_bind(
+                        exchange=EXCHANGE,
+                        queue=queue_name,
+                        routing_key='promotion.highlight',
+                    )
 
                     def callback(ch_, method, properties, body):
                         try:
@@ -191,27 +202,50 @@ class Gateway:
                                 pass
                             return
 
-                        if not self.verify_promotion_signature(payload, signature):
-                            print("[Gateway] Assinatura do Promotion Service INVÁLIDA — descartada.")
-                            try:
-                                ch_.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
-                            except Exception:
-                                pass
-                            return
-
-                        promo_id = payload.get('id')
-                        with self._lock:
-                            ids_existentes = {p.get('id') for p in self.promocoes_validas}
-                            if promo_id in ids_existentes:
-                                print(f"[Gateway] Promoção {promo_id} duplicata — descartada.")
+                        if method.routing_key == 'promotion.published':
+                            if not self.verify_promotion_signature(payload, signature):
+                                print("[Gateway] Assinatura do Promotion Service INVÁLIDA — descartada.")
                                 try:
                                     ch_.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
                                 except Exception:
                                     pass
                                 return
-                            self.promocoes_validas.append(payload)
 
-                        print(f"[Gateway] Promoção {promo_id} aceita e listada.")
+                            promo_id = payload.get('id')
+                            with self._lock:
+                                ids_existentes = {p.get('id') for p in self.promocoes_validas}
+                                if promo_id in ids_existentes:
+                                    print(f"[Gateway] Promoção {promo_id} duplicata — descartada.")
+                                    try:
+                                        ch_.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
+                                    except Exception:
+                                        pass
+                                    return
+                                self.promocoes_validas.append(payload)
+
+                            print(f"[Gateway] Promoção {promo_id} aceita e listada.")
+
+                        elif method.routing_key == 'promotion.highlight':
+                            if not self._verify_ranking_signature(payload, signature):
+                                print("[Gateway] Assinatura do Ranking INVÁLIDA — descartada.")
+                                try:
+                                    ch_.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
+                                except Exception:
+                                    pass
+                                return
+
+                            promo_id = payload.get('id_promocao')
+                            score    = payload.get('score', 0)
+                            with self._lock:
+                                for p in self.promocoes_validas:
+                                    if p.get('id') == promo_id:
+                                        p.setdefault('votos', {'positivos': 0, 'negativos': 0})
+                                        p['votos']['score']    = score
+                                        p['hot_deal'] = True
+                                        break
+
+                            print(f"[Gateway] Promoção {promo_id} marcada como HOT DEAL (score={score}).")
+
                         try:
                             ch_.basic_ack(delivery_tag=method.delivery_tag)
                         except Exception:
