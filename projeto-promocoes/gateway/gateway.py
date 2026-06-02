@@ -53,9 +53,9 @@ class Gateway:
 
         self.promocoes_validas: list[dict] = []
         self._interesses: dict[str, set[str]] = {}
-        self._lock = threading.Lock()
+        self._lock     = threading.Lock()
+        self._pub_lock = threading.Lock()
 
-        # Canal de publicação (thread principal)
         self._pub_conn = pika.BlockingConnection(
             pika.ConnectionParameters(host='localhost'))
         self._pub_ch = self._pub_conn.channel()
@@ -109,11 +109,12 @@ class Gateway:
             'payload': payload,
             'signature': signature,
         }
-        self._pub_ch.basic_publish(
-            exchange=EXCHANGE,
-            routing_key=routing_key,
-            body=json.dumps(envelope, ensure_ascii=False),
-        )
+        with self._pub_lock:
+            self._pub_ch.basic_publish(
+                exchange=EXCHANGE,
+                routing_key=routing_key,
+                body=json.dumps(envelope, ensure_ascii=False),
+            )
         return signature
 
     def cadastrar_promocao(
