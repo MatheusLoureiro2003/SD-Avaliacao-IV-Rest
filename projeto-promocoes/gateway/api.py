@@ -7,6 +7,8 @@
 
 from flask import Flask, jsonify, request #O request é o objeto que dá acesso ao corpo JSON da requisição
 from flask_cors import CORS
+from flask import Flask, render_template, jsonify, request, Response
+from queue import Queue
 from gateway import Gateway
 
 servidorWeb = Flask(__name__)
@@ -98,5 +100,17 @@ def cancelar_interesse(categoria):
     gw.cancelar_interesse(client_id, categoria)
     return jsonify({'ok': True}), 200
 
+# ---------------------------------------------------------------
+#  SSE
+# ---------------------------------------------------------------
+
+@servidorWeb.route('/event/<client_id>', methods=['GET'])
+def event(client_id):
+    gw._sse_queues[client_id] = Queue()
+    def listen():
+        while True:
+            message = gw._sse_queues[client_id].get()
+            yield message
+    return Response(listen(),mimetype="text/event-stream", headers={'Cache-Control': 'no-cache'})      
 if __name__ == '__main__':
     servidorWeb.run(host='0.0.0.0', port=5001)
