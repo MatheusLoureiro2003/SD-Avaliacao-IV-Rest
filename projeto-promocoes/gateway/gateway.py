@@ -183,6 +183,11 @@ class Gateway:
                         queue=queue_name,
                         routing_key='promotion.highlight',
                     )
+                    ch.queue_bind(
+                        exchange=EXCHANGE,
+                        queue=queue_name,
+                        routing_key='promotion.*',                        
+                    )
 
                     def callback(ch_, method, properties, body):
                         try:
@@ -195,18 +200,19 @@ class Gateway:
                                 pass
                             return
 
-                        payload   = envelope.get('payload')
-                        signature = envelope.get('signature')
 
-                        if not payload or not signature:
-                            print("[Gateway] Envelope incompleto — descartado.")
-                            try:
-                                ch_.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
-                            except Exception:
-                                pass
-                            return
 
                         if method.routing_key == 'promotion.published':
+                            payload   = envelope.get('payload')
+                            signature = envelope.get('signature')
+
+                            if not payload or not signature:
+                                print("[Gateway] Envelope incompleto — descartado.")
+                                try:
+                                    ch_.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
+                                except Exception:
+                                   pass
+                                return
                             if not self.verify_promotion_signature(payload, signature):
                                 print("[Gateway] Assinatura do Promotion Service INVÁLIDA — descartada.")
                                 try:
@@ -230,6 +236,16 @@ class Gateway:
                             print(f"[Gateway] Promoção {promo_id} aceita e listada.")
 
                         elif method.routing_key == 'promotion.highlight':
+                            payload   = envelope.get('payload')
+                            signature = envelope.get('signature')
+
+                            if not payload or not signature:
+                                print("[Gateway] Envelope incompleto — descartado.")
+                                try:
+                                    ch_.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
+                                except Exception:
+                                   pass
+                                return                            
                             if not self._verify_ranking_signature(payload, signature):
                                 print("[Gateway] Assinatura do Ranking INVÁLIDA — descartada.")
                                 try:
@@ -250,6 +266,11 @@ class Gateway:
 
                             print(f"[Gateway] Promoção {promo_id} marcada como HOT DEAL (score={score}).")
 
+                        elif method.routing_key not in('promotion.published','promotion.highlight'):
+                            mensagem = envelope.get('mensagem')
+                            categoria = envelope.get('categoria')
+                            self.push_notificacao(categoria, mensagem)    
+                        
                         try:
                             ch_.basic_ack(delivery_tag=method.delivery_tag)
                         except Exception:
