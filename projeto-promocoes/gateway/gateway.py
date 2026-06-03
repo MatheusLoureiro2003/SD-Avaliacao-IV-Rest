@@ -3,7 +3,7 @@ import os
 import threading
 import time
 import uuid
-
+from queue import Queue
 import pika
 from Crypto.Hash import SHA256
 from Crypto.PublicKey import RSA
@@ -15,6 +15,7 @@ PRIVATE_KEY_PATH          = os.path.join(_BASE_DIR, 'private_key.der')
 PUBLIC_KEY_PATH           = os.path.join(_BASE_DIR, 'public_key.der')
 PROMOTION_PUBLIC_KEY_PATH = os.path.join(_BASE_DIR, '..', 'promotion', 'public_key.der')
 RANKING_PUBLIC_KEY_PATH   = os.path.join(_BASE_DIR, '..', 'ranking',   'public_key.der')
+
 
 
 def _ensure_keys():
@@ -31,6 +32,8 @@ class Gateway:
     def __init__(self):
         _ensure_keys()
 
+        #dicionario para SSE -> client_id com as queues
+        self._sse_queues: dict[str,Queue] = {}
 
         with open(PRIVATE_KEY_PATH, 'rb') as f:
             self._private_key = RSA.import_key(f.read())
@@ -283,6 +286,16 @@ class Gateway:
             if client_id in self._interesses:
                 self._interesses[client_id].discard(categoria)
 
+    # ------------------------------------------------------------------
+    # Notificação - SSE
+    # ------------------------------------------------------------------
+    def push_notificacao(self,categoria: str, mensagem: str):
+        with self._lock:
+            for client_id in self._interesses:
+                if categoria in self._interesses[client_id]:
+                    if self._sse_queues.get(client_id) is not None:
+                        mensagem = f"data: {json.dumps({'categoria': categoria, 'mensagem': mensagem})}\n\n"
+                        self._sse_queues[client_id].put(mensagem)
     # ------------------------------------------------------------------
     # Encerramento
     # ------------------------------------------------------------------
