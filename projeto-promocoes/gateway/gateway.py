@@ -147,6 +147,17 @@ class Gateway:
             'voto': voto,
         }
         signature = self.publish_event('promotion.vote', payload)
+
+        with self._lock:
+            for p in self.promocoes_validas:
+                if p.get('id') == id_promocao:
+                    votos = p.setdefault('votos', {'positivos': 0, 'negativos': 0})
+                    if voto == 'positivo':
+                        votos['positivos'] = votos.get('positivos', 0) + 1
+                    elif voto == 'negativo':
+                        votos['negativos'] = votos.get('negativos', 0) + 1
+                    break
+
         return signature
 
     def listar_promocoes(self) -> list[dict]:
