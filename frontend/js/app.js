@@ -20,6 +20,12 @@ app.controller('AppCtrl', function() {
   this.aba        = 'cliente';
   this.clientId   = gerarClientId();
   this.interesses = {};  // { categoria: true/false } — compartilhado entre lista e gerenciar
+  this.notificacoes = []
+  var source = new EventSource(API + '/stream/' + this.clientId)
+  source.addEventListener('message', event => {
+          let data = JSON.parse(event.data);
+          this.notificacoes.push(data);
+      }, false);
 });
 
 // ---------------------------------------------------------------
