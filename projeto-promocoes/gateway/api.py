@@ -113,4 +113,4 @@ def event(client_id):
             yield message
     return Response(listen(),mimetype="text/event-stream", headers={'Cache-Control': 'no-cache'})      
 if __name__ == '__main__':
-    servidorWeb.run(host='0.0.0.0', port=5001)
+    servidorWeb.run(host='0.0.0.0', port=5001, threaded=True)

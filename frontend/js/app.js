@@ -16,16 +16,17 @@ const app = angular.module('promoApp', []);
 // ---------------------------------------------------------------
 // Controller principal — controla abas e client_id
 // ---------------------------------------------------------------
-app.controller('AppCtrl', function() {
+app.controller('AppCtrl', function($scope) {
   this.aba        = 'cliente';
   this.clientId   = gerarClientId();
   this.interesses = {};  // { categoria: true/false } — compartilhado entre lista e gerenciar
   this.notificacoes = []
-  var source = new EventSource(API + '/stream/' + this.clientId)
+  var source = new EventSource(API + '/event/' + this.clientId)
   source.addEventListener('message', event => {
           let data = JSON.parse(event.data);
-          this.notificacoes.push(data);
-      }, false);
+          $scope.$apply(() => {
+      this.notificacoes.push(data);
+    })}, false);
 });
 
 // ---------------------------------------------------------------
