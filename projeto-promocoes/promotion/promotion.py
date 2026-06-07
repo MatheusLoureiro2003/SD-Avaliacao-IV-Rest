@@ -116,6 +116,7 @@ class PromotionService:
             'categoria': payload['categoria'],
             'preco_original': payload['preco_original'],
             'preco_promocional': payload['preco_promocional'],
+            'email': payload.get('email', ''),
             'votos': {
                 'positivos': 0,
                 'negativos': 0,
