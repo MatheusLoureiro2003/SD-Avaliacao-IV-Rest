@@ -40,6 +40,9 @@
       <lista-promocoes interesses="app.interesses"></lista-promocoes>
       <hr class="my-4" />
       <gerenciar-interesses client-id="app.clientId" interesses="app.interesses"></gerenciar-interesses>
+      <div class="alert alert-info" ng-repeat="n in app.notificacoes">
+      <strong>{{n.categoria}}</strong>: {{n.mensagem}}
+      </div>
     </div>
 
     <!-- Aba: Loja -->

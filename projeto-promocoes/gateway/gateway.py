@@ -3,7 +3,7 @@ import os
 import threading
 import time
 import uuid
-
+from queue import Queue
 import pika
 from Crypto.Hash import SHA256
 from Crypto.PublicKey import RSA
@@ -15,6 +15,7 @@ PRIVATE_KEY_PATH          = os.path.join(_BASE_DIR, 'private_key.der')
 PUBLIC_KEY_PATH           = os.path.join(_BASE_DIR, 'public_key.der')
 PROMOTION_PUBLIC_KEY_PATH = os.path.join(_BASE_DIR, '..', 'promotion', 'public_key.der')
 RANKING_PUBLIC_KEY_PATH   = os.path.join(_BASE_DIR, '..', 'ranking',   'public_key.der')
+
 
 
 def _ensure_keys():
@@ -31,6 +32,8 @@ class Gateway:
     def __init__(self):
         _ensure_keys()
 
+        #dicionario para SSE -> client_id com as queues
+        self._sse_queues: dict[str,Queue] = {}
 
         with open(PRIVATE_KEY_PATH, 'rb') as f:
             self._private_key = RSA.import_key(f.read())
@@ -191,6 +194,11 @@ class Gateway:
                         queue=queue_name,
                         routing_key='promotion.highlight',
                     )
+                    ch.queue_bind(
+                        exchange=EXCHANGE,
+                        queue=queue_name,
+                        routing_key='promotion.*',                        
+                    )
 
                     def callback(ch_, method, properties, body):
                         try:
@@ -203,18 +211,19 @@ class Gateway:
                                 pass
                             return
 
-                        payload   = envelope.get('payload')
-                        signature = envelope.get('signature')
 
-                        if not payload or not signature:
-                            print("[Gateway] Envelope incompleto — descartado.")
-                            try:
-                                ch_.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
-                            except Exception:
-                                pass
-                            return
 
                         if method.routing_key == 'promotion.published':
+                            payload   = envelope.get('payload')
+                            signature = envelope.get('signature')
+
+                            if not payload or not signature:
+                                print("[Gateway] Envelope incompleto — descartado.")
+                                try:
+                                    ch_.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
+                                except Exception:
+                                   pass
+                                return
                             if not self.verify_promotion_signature(payload, signature):
                                 print("[Gateway] Assinatura do Promotion Service INVÁLIDA — descartada.")
                                 try:
@@ -238,6 +247,16 @@ class Gateway:
                             print(f"[Gateway] Promoção {promo_id} aceita e listada.")
 
                         elif method.routing_key == 'promotion.highlight':
+                            payload   = envelope.get('payload')
+                            signature = envelope.get('signature')
+
+                            if not payload or not signature:
+                                print("[Gateway] Envelope incompleto — descartado.")
+                                try:
+                                    ch_.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
+                                except Exception:
+                                   pass
+                                return                            
                             if not self._verify_ranking_signature(payload, signature):
                                 print("[Gateway] Assinatura do Ranking INVÁLIDA — descartada.")
                                 try:
@@ -258,6 +277,11 @@ class Gateway:
 
                             print(f"[Gateway] Promoção {promo_id} marcada como HOT DEAL (score={score}).")
 
+                        elif method.routing_key not in('promotion.published','promotion.highlight'):
+                            mensagem = envelope.get('mensagem')
+                            categoria = envelope.get('categoria')
+                            self.push_notificacao(categoria, mensagem)    
+                        
                         try:
                             ch_.basic_ack(delivery_tag=method.delivery_tag)
                         except Exception:
@@ -294,6 +318,16 @@ class Gateway:
             if client_id in self._interesses:
                 self._interesses[client_id].discard(categoria)
 
+    # ------------------------------------------------------------------
+    # Notificação - SSE
+    # ------------------------------------------------------------------
+    def push_notificacao(self,categoria: str, mensagem: str):
+        with self._lock:
+            for client_id in self._interesses:
+                if categoria in self._interesses[client_id]:
+                    if self._sse_queues.get(client_id) is not None:
+                        mensagem = f"data: {json.dumps({'categoria': categoria, 'mensagem': mensagem})}\n\n"
+                        self._sse_queues[client_id].put(mensagem)
     # ------------------------------------------------------------------
     # Encerramento
     # ------------------------------------------------------------------
