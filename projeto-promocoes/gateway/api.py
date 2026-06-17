@@ -32,7 +32,7 @@ def listar():
 @servidorWeb.route('/promocoes', methods=['POST'])
 def cadastrar():
     dados = request.get_json()
-    id_gerado, assinatura = gw.cadastrar_promocao(
+    id_gerado = gw.cadastrar_promocao(
         dados['titulo'],
         dados['descricao'],
         dados['categoria'],
